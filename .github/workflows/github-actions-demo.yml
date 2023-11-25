@@ -1,0 +1,123 @@
+name: GitHub Actions Workflow Demo
+on:
+  pull_request:
+  push:
+  #    branches:
+  #      -master
+jobs:
+  # Label of the runner job
+  BuildSQL:
+    # You must use a Linux environment when using service containers or container jobs
+    runs-on: ubuntu-latest
+
+    # Service containers to run with `runner-job`
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        # Provide the password for postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps tcp port 5432 on service container to the host
+          - 5432:5432
+    steps:
+      # Downloads a copy of the code in your repository before running CI tests
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          npm install pg
+      - run: ls -la
+      - name: Connect to PostgreSQL and run SQL
+        # Runs a script that creates a PostgreSQL table, populates
+        # the table with data, and then retrieves the data
+        run: node .github/scripts/client.js "sql_db/"
+        # Environment variables used by the `client.js` script to create
+        # a new PostgreSQL table.
+        env:
+          # The hostname used to communicate with the PostgreSQL service container
+          POSTGRES_HOST: localhost
+          # The default PostgreSQL port
+          POSTGRES_PORT: 5432
+
+  BuildApp:
+    needs: BuildSQL
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
+      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
+      - run: ls -la
+      - name: Run test scenario 1
+        run: |
+          # make file runnable, might not be necessary
+          chmod +x "./build.sh"
+          # run script
+          "./build.sh"
+
+  Test_Scenario_1:
+    needs: BuildApp
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
+      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
+      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
+      - run: echo "GitHub Workspace - ${{ github.workspace }}"
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+      - run: ls -la
+      - name: Run test scenario 1
+        run: |
+          # make file runnable, might not be necessary
+          chmod +x ".github/scripts/test1.sh"
+          # run script
+          ".github/scripts/test1.sh"
+      - run: echo "🍏 This job's status is ${{ job.status }}."
+
+  Test_Scenario_2:
+    needs: Test_Scenario_1
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Add the next scenario"
+
+  Deploy:
+    needs: Test_Scenario_2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Create artifacts name
+        run: |
+          ls -la
+          source version
+          echo "version - $VERSION"
+          echo "ARTIFACTS_NAME=demo-artifacts-$VERSION" >> $GITHUB_ENV
+      - name: Get artifacts name
+        run: |
+          echo "ARTIFACTS_NAME = ${{ env.ARTIFACTS_NAME }}"
+      - name: Deploy artifacts
+        run: |
+          # make file runnable, might not be necessary
+          chmod +x ".github/scripts/artifacts_maker.sh"
+          # run script
+          ".github/scripts/artifacts_maker.sh" ${{ env.ARTIFACTS_NAME }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.ARTIFACTS_NAME }}
+          path: ~/${{ env.ARTIFACTS_NAME }}/
